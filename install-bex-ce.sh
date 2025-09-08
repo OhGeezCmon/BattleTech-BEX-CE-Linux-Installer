@@ -7,6 +7,7 @@
 # Written by: OhGeezCmon and Cursor
 #
 # This script automates the installation of BEX:CE on Linux systems using Steam Proton
+# Also optionally installs the Extended BiggerDrops Patch mod
 # Requires: Steam and Proton (no Wine support)
 # Based on: https://discourse.modsinexile.com/t/battletech-extended-3025-3061-1-9-3-7/426
 
@@ -25,6 +26,7 @@ LOG_FILE="$SCRIPT_DIR/bex-install.log"
 BACKUP_DIR="$SCRIPT_DIR/backups"
 VERBOSE_MODE=false
 DEBUG_MODE=false
+INSTALL_BIGGERDROPS=false
 
 # BattleTech Steam App ID (for Proton compat data)
 BATTLETECH_APP_ID="637090"
@@ -33,6 +35,23 @@ BATTLETECH_APP_ID="637090"
 BEX_CE_URL="https://discourse.modsinexile.com/uploads/short-url/iPwkIrehw4cIX24DyWbRMQ5pWDO.zip"
 MODTEK_URL="https://github.com/BattletechModders/ModTek/releases/download/v0.8.0.0/ModTek_v0.8.0.zip"
 CAB_URL="https://discourse.modsinexile.com/uploads/short-url/8X3zwatCvUjgEx3DR6y4yqlUb3i.exe"
+BIGGERDROPS_URL="https://discourse.modsinexile.com/uploads/short-url/A3IKwCNwRIuv26jMXmQRxDLIVrs.zip"
+INSTALL_BIGGERDROPS=false
+
+# Step tracking
+CURRENT_STEP=0
+TOTAL_STEPS=0
+
+# Function to show step progress
+show_step_progress() {
+    local step_name="$1"
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    echo
+    echo -e "${GREEN}================================================================================${NC}"
+    echo -e "${GREEN}${BOLD}✅ STEP $CURRENT_STEP OF $TOTAL_STEPS COMPLETED: $step_name ✅${NC}"
+    echo -e "${GREEN}================================================================================${NC}"
+    echo
+}
 
 # Function to print colored output
 print_status() {
@@ -60,16 +79,21 @@ log_message() {
 wait_for_confirmation() {
     if [[ "$DEBUG_MODE" == "true" ]]; then
         echo
-        print_status "Press Enter to continue..."
+        echo -e "${YELLOW}================================================================================${NC}"
+        echo -e "${YELLOW}${BOLD}⏸️  DEBUG MODE - STEP PAUSE ⏸️${NC}"
+        echo -e "${YELLOW}================================================================================${NC}"
+        echo
+        print_status "Press Enter to continue to the next step..."
         read -r
         echo
     fi
 }
 
-# Function to execute commands with verbose logging
+# Function to execute commands with verbose logging and proper error handling
 execute_command() {
     local cmd="$1"
     local description="$2"
+    local critical="${3:-true}"  # Default to critical (exit on failure)
     
     if [[ "$VERBOSE_MODE" == "true" ]]; then
         print_status "Executing: $cmd"
@@ -91,9 +115,40 @@ execute_command() {
         local exit_code=$?
         print_error "Command failed with exit code: $exit_code"
         log_message "Command failed: $cmd (exit code: $exit_code)"
+        
+        if [[ "$critical" == "true" ]]; then
+            print_error "Critical command failed. Aborting installation."
+            exit $exit_code
+        fi
         return $exit_code
     fi
 }
+
+# Function to verify file operations succeeded
+verify_file_operation() {
+    local operation="$1"  # "download", "extract", etc.
+    local file_path="$2"
+    local expected_type="${3:-file}"  # "file" or "directory"
+    
+    if [[ "$expected_type" == "directory" ]]; then
+        if [[ -d "$file_path" ]]; then
+            print_success "$operation completed successfully"
+            return 0
+        else
+            print_error "$operation failed - directory not found: $file_path"
+            return 1
+        fi
+    else
+        if [[ -f "$file_path" ]]; then
+            print_success "$operation completed successfully"
+            return 0
+        else
+            print_error "$operation failed - file not found: $file_path"
+            return 1
+        fi
+    fi
+}
+
 
 # Function to check if a command exists
 command_exists() {
@@ -219,7 +274,7 @@ prompt_battletech_path() {
     done
 }
 
-# Function to download file with progress and resume support
+# Function to download file with progress and proper error handling
 download_file() {
     local url="$1"
     local output="$2"
@@ -230,50 +285,39 @@ download_file() {
         print_success "File $filename already exists. Skipping download."
         log_message "Skipped download of $filename - file already exists"
         return 0
-    else
-        print_status "Downloading $filename..."
     fi
     
+    print_status "Downloading $filename..."
+    
+    # Determine download command and execute
+    local download_cmd=""
     if command_exists wget; then
-        local cmd="wget --progress=bar:force -O \"$output\" \"$url\""
-        
-        if [[ "$VERBOSE_MODE" == "true" ]]; then
-            print_status "Executing: $cmd"
-            echo "Command: $cmd" >> "$LOG_FILE"
-            execute_command "$cmd" "Downloading $filename with wget"
-        else
-            # Show progress for non-verbose mode
-            wget --progress=bar:force -O "$output" "$url" 2>&1 | \
-                grep -o '[0-9]*%' | tail -1 | while read percent; do
-                echo -ne "\rProgress: $percent"
-            done
-            echo
-        fi
+        download_cmd="wget --progress=bar:force -O \"$output\" \"$url\""
     elif command_exists curl; then
-        local cmd="curl -L --progress-bar -o \"$output\" \"$url\""
-        
-        if [[ "$VERBOSE_MODE" == "true" ]]; then
-            print_status "Executing: $cmd"
-            echo "Command: $cmd" >> "$LOG_FILE"
-            execute_command "$cmd" "Downloading $filename with curl"
-        else
-            curl -L --progress-bar -o "$output" "$url"
-        fi
+        download_cmd="curl -L --progress-bar -o \"$output\" \"$url\""
     else
         print_error "Neither wget nor curl is available. Please install one of them."
         exit 1
     fi
     
-    if [[ -f "$output" ]]; then
-        print_success "Downloaded $filename"
-        log_message "Downloaded $filename from $url"
+    # Execute download with proper error handling
+    if [[ "$VERBOSE_MODE" == "true" ]]; then
+        execute_command "$download_cmd" "Downloading $filename"
     else
-        print_error "Failed to download $filename"
-        exit 1
+        # For non-verbose mode, execute directly but still check for errors
+        if ! eval "$download_cmd"; then
+            print_error "Download failed for $filename"
+            log_message "Download failed: $download_cmd"
+            exit 1
+        fi
     fi
+    
+    # Verify download succeeded
+    verify_file_operation "Download" "$output" "file"
+    log_message "Downloaded $filename from $url"
 }
 
-# Function to extract zip file
+# Function to extract zip file with proper error handling
 extract_zip() {
     local zip_file="$1"
     local extract_dir="$2"
@@ -281,19 +325,26 @@ extract_zip() {
     
     print_status "Extracting $filename..."
     
-    if command_exists unzip; then
-        # Create fresh extraction directory
-        local cmd="mkdir -p \"$extract_dir\""
-        execute_command "$cmd" "Creating extraction directory"
-        
-        # Extract the zip file
-        local cmd="unzip -o -q \"$zip_file\" -d \"$extract_dir\""
-        execute_command "$cmd" "Extracting $filename to $extract_dir"
-       
+    # Verify source file exists
+    if [[ ! -f "$zip_file" ]]; then
+        print_error "Source file not found: $zip_file"
+        exit 1
+    fi
+    
+    # Create extraction directory
+    local cmd="mkdir -p \"$extract_dir\""
+    execute_command "$cmd" "Creating extraction directory"
+    
+    # Extract the zip file
+    local cmd="unzip -o -q \"$zip_file\" -d \"$extract_dir\""
+    execute_command "$cmd" "Extracting $filename to $extract_dir"
+    
+    # Verify extraction succeeded by checking if directory has content
+    if [[ -d "$extract_dir" ]] && [[ -n "$(ls -A "$extract_dir" 2>/dev/null)" ]]; then
         print_success "Extracted $filename"
-        log_message "Extracted $filename to $extract_dir with proper ownership and permissions"
+        log_message "Extracted $filename to $extract_dir"
     else
-        print_error "unzip is not available. Please install unzip."
+        print_error "Extraction failed - no content found in $extract_dir"
         exit 1
     fi
 }
@@ -310,9 +361,16 @@ backup_existing_mods() {
         if [[ "$file_count" -gt 0 ]]; then
             print_warning "Existing Mods directory found with $file_count files."
             echo
-            echo "Options:"
-            echo "1. Create backup of existing mods (recommended)"
-            echo "2. Continue without backup (existing mods will be overwritten)"
+            echo -e "${YELLOW}================================================================================${NC}"
+            echo -e "${YELLOW}${BOLD}💾 BACKUP OPTIONS 💾${NC}"
+            echo -e "${YELLOW}================================================================================${NC}"
+            echo
+            echo -e "${BOLD}Existing Mods directory found with $file_count files.${NC}"
+            echo
+            echo -e "${GREEN}1.${NC} Create backup of existing mods (recommended)"
+            echo -e "${GREEN}2.${NC} Continue without backup (existing mods will be overwritten)"
+            echo
+            echo -e "${YELLOW}================================================================================${NC}"
             echo
             while true; do
                 read -p "Choose an option (1 or 2): " choice
@@ -445,7 +503,7 @@ EOF
         print_status "Full command: $cmd"
         execute_command "$cmd" "Running ModTekInjector.exe batch file with Proton start"
         
-        print_success "ModTek injection completed"
+        show_step_progress "ModTek Injection"
         log_message "ModTekInjector.exe executed via batch file with $proton_cmd"
     else
         print_error "Could not find ModTekInjector.exe in extracted files"
@@ -495,12 +553,34 @@ install_cab() {
     # Set the specific compat data path for this app
     export STEAM_COMPAT_DATA_PATH="$app_compat_path"
     
+    # Inform user before starting installation
+    print_status "Starting CAB installer with Proton..."
+    echo
+    echo -e "${YELLOW}================================================================================${NC}"
+    echo -e "${YELLOW}${BOLD}⚠️  IMPORTANT CAB INSTALLATION INSTRUCTIONS ⚠️${NC}"
+    echo -e "${YELLOW}================================================================================${NC}"
+    echo
+    echo -e "${BOLD}When the CAB installer window opens, please follow these steps:${NC}"
+    echo
+    echo -e "${GREEN}1.${NC} Checkout workspace: Leave unchanged (should be on same hard drive)"
+    echo -e "${GREEN}2.${NC} Install Target: Make sure it shows ${BOLD}c:\\BATTLETECH\\mods${NC}"
+    echo -e "${GREEN}3.${NC} ${BOLD}CRITICAL:${NC} Set ${BOLD}\"CAB Install Mode\"${NC} to ${BOLD}${RED}\"Legacy CABs\"${NC}"
+    echo -e "${GREEN}4.${NC} Click ${BOLD}\"Update CAB\"${NC} and wait for it to finish"
+    echo -e "${GREEN}5.${NC} ${BOLD}Close the installer window${NC} when complete"
+    echo
+    echo -e "${YELLOW}================================================================================${NC}"
+    echo
+    print_status "Press Enter when you're ready to start the CAB installation..."
+    read -r
+    
     local cmd="\"$proton_cmd\" run \"$cab_exe\""
     execute_command "$cmd" "Running CAB installer with Proton"
     
     # Wait for user to complete installation
-    print_status "Please complete the CAB installation in the GUI window that opened."
-    print_status "Press Enter when the installation is complete..."
+    echo
+    print_status "CAB installer window is now open!"
+    print_warning "Remember: Set 'CAB Install Mode' to 'Legacy CAB' and target 'c:\\BATTLETECH\\mods'"
+    print_status "Press Enter when you have completed the installation and closed the window..."
     read -r
     
     # Move CAB files from Proton directory to actual BattleTech Mods directory
@@ -518,13 +598,35 @@ install_cab() {
         
         print_success "CAB files copied to BattleTech Mods directory"
         log_message "CAB files copied from $proton_mods_dir to $battletech_mods_dir"
+        show_step_progress "CAB Files Installation"
     else
         print_warning "CAB files not found in expected Proton directory: $proton_mods_dir"
         log_message "CAB files not found in Proton directory - may need manual installation"
+        print_warning "CAB installation may not have completed successfully"
+        print_warning "Please check if CAB was installed manually or try running the installer again"
     fi
     
-    print_success "CAB installation completed"
     log_message "CAB installer executed with $proton_cmd"
+}
+
+# Function to install BiggerDrops mod
+install_biggerdrops() {
+    local battletech_path="$1"
+    local temp_dir="$SCRIPT_DIR/temp"
+    
+    print_status "Installing Extended BiggerDrops Patch..."
+    wait_for_confirmation
+    
+    # Download BiggerDrops ZIP file
+    local biggerdrops_zip="$temp_dir/Extended_BiggerDrops_Patch.zip"
+    download_file "$BIGGERDROPS_URL" "$biggerdrops_zip"
+    
+    # Extract BiggerDrops to Mods directory
+    local mods_dir="$battletech_path/Mods"
+    extract_zip "$biggerdrops_zip" "$mods_dir"
+    
+    show_step_progress "BiggerDrops Files Extraction"
+    log_message "Extended BiggerDrops Patch extracted to $mods_dir"
 }
 
 # Function to install BEX:CE
@@ -552,7 +654,7 @@ install_bex_ce() {
         # Find the extracted BEX directory
         local bex_dir=$(find "$mods_dir" -maxdepth 1 -type d -name "*Extended*" | head -1)
         if [[ -n "$bex_dir" ]]; then
-            print_success "BEX:CE installed successfully"
+            show_step_progress "BEX Files Extraction"
             log_message "BEX:CE installed to $mods_dir"
         else
             print_error "Could not find BEX:CE files in extracted archive"
@@ -572,7 +674,9 @@ show_summary() {
     local cleanup_paths=("$@")
     
     echo
-    print_success "BEX:CE installation completed successfully!"
+    echo -e "${GREEN}================================================================================${NC}"
+    echo -e "${GREEN}${BOLD}🎉 ALL STEPS COMPLETED - BEX:CE INSTALLATION SUCCESSFUL! 🎉${NC}"
+    echo -e "${GREEN}================================================================================${NC}"
     echo
     echo "Installation Summary:"
     echo "===================="
@@ -580,6 +684,11 @@ show_summary() {
     echo "ModTek: Installed (via Proton)"
     echo "CAB: Installed (via Proton)"
     echo "BEX:CE: Installed"
+    if [[ "$INSTALL_BIGGERDROPS" == "true" ]]; then
+        echo "Extended BiggerDrops Patch: Installed"
+    else
+        echo "Extended BiggerDrops Patch: Skipped"
+    fi
     echo "Log File: $LOG_FILE"
     echo
     echo "Next Steps:"
@@ -596,23 +705,47 @@ show_summary() {
     echo "- You must start a new game"
     echo "- The mod adds 1000+ mechs and vehicles"
     echo "- Timeline starts in 3025 and progresses to 3061"
+    if [[ "$INSTALL_BIGGERDROPS" == "true" ]]; then
+        echo "- Extended BiggerDrops Patch increases mission drop sizes for more challenging battles"
+    fi
+    show_cleanup_commands
+    echo "For support, visit: https://github.com/OhGeezCmon/BattleTech-BEX-CE-Linux-Installer"
+    echo "Or contact ohgeezcmon on Discord"
     echo
-    echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${YELLOW}║${NC} ${RED}⚠️  IMPORTANT: CLEANUP COMMANDS (OPTIONAL) ⚠️${NC}                                    ${YELLOW}║${NC}"
-    echo -e "${YELLOW}╠══════════════════════════════════════════════════════════════════════════════╣${NC}"
-    echo -e "${YELLOW}║${NC} The following directories can be safely removed to free up disk space:     ${YELLOW}║${NC}"
-    echo -e "${YELLOW}║${NC}                                                                          ${YELLOW}║${NC}"
+}
+
+# Function to show cleanup commands
+show_cleanup_commands() {
+    local temp_dir="$SCRIPT_DIR/temp"
+    local cleanup_paths=("$temp_dir")
+    
+    # Check for Proton directory cleanup if CAB was installed
+    local proton_info
+    if proton_info=$(find_proton); then
+        # Parse Proton path and compat data path
+        local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
+        local proton_mods_dir="$compat_data/$BATTLETECH_APP_ID/pfx/drive_c/BATTLETECH/mods"
+        
+        if [[ -d "$proton_mods_dir" ]]; then
+            cleanup_paths+=("$proton_mods_dir")
+        fi
+    fi
+    
+    echo
+    echo -e "${YELLOW}================================================================================${NC}"
+    echo -e "${YELLOW}${RED}⚠️  CLEANUP COMMANDS (OPTIONAL) ⚠️${NC}"
+    echo -e "${YELLOW}================================================================================${NC}"
+    echo
+    echo "The following directories can be safely removed to free up disk space:"
+    echo
     for path in "${cleanup_paths[@]}"; do
         if [[ -n "$path" && -d "$path" ]]; then
-            echo -e "${YELLOW}║${NC} ${GREEN}rm -rf \"$path\"${NC}"
+            echo -e "${GREEN}rm -rf \"$path\"${NC}"
         fi
     done
-    echo -e "${YELLOW}║${NC}                                                                          ${YELLOW}║${NC}"
-    echo -e "${YELLOW}║${NC} Note: These directories contain temporary files and Proton installation data ${YELLOW}║${NC}"
-    echo -e "${YELLOW}║${NC} that are no longer needed after successful installation.                   ${YELLOW}║${NC}"
-    echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
     echo
-    echo "For support, visit: https://discourse.modsinexile.com/"
+    echo "Note: These directories contain temporary files and Proton installation data"
+    echo "that are no longer needed after installation."
     echo
 }
 
@@ -662,10 +795,25 @@ main() {
         esac
     done
     
-    echo "=========================================="
-    echo "BEX:CE Installation Script for Linux"
-    echo "BattleTech Extended 3025-3061 v1.9.3.7"
-    echo "=========================================="
+    echo
+    echo -e "${YELLOW}==========================================================================================${NC}"
+    echo -e "${YELLOW}${BOLD}██████╗  █████╗ ████████╗████████╗██╗     ███████╗████████╗███████╗ ██████╗██╗  ██╗${NC}"
+    echo -e "${YELLOW}${BOLD}██╔══██╗██╔══██╗╚══██╔══╝╚══██╔══╝██║     ██╔════╝╚══██╔══╝██╔════╝██╔════╝██║  ██║${NC}"
+    echo -e "${YELLOW}${BOLD}██████╔╝███████║   ██║      ██║   ██║     █████╗     ██║   █████╗  ██║     ███████║${NC}"
+    echo -e "${YELLOW}${BOLD}██╔══██╗██╔══██║   ██║      ██║   ██║     ██╔══╝     ██║   ██╔══╝  ██║     ██╔══██║${NC}"
+    echo -e "${YELLOW}${BOLD}██████╔╝██║  ██║   ██║      ██║   ███████╗███████╗   ██║   ███████╗╚██████╗██║  ██║${NC}"
+    echo -e "${YELLOW}${BOLD}╚═════╝ ╚═╝  ╚═╝   ╚═╝      ╚═╝   ╚══════╝╚══════╝   ╚═╝   ╚══════╝ ╚═════╝╚═╝  ╚═╝${NC}"
+    echo
+    echo -e "${WHITE}${BOLD}▄▖  ▗      ▌   ▌  ▄▖             ▌    ▌    ▄▖ ▌▘▗ ▘    ${NC}"
+    echo -e "${WHITE}${BOLD}▙▖▚▘▜▘█▌▛▌▛▌█▌▛▌  ▌ ▛▌▛▛▌▛▛▌▀▌▛▌▛▌█▌▛▘ ▛▘  ▙▖▛▌▌▜▘▌▛▌▛▌${NC}"
+    echo -e "${WHITE}${BOLD}▙▖▞▖▐▖▙▖▌▌▙▌▙▖▙▌  ▙▖▙▌▌▌▌▌▌▌█▌▌▌▙▌▙▖▌  ▄▌  ▙▖▙▌▌▐▖▌▙▌▌▌${NC}"
+    echo
+    echo -e "${YELLOW}==========================================================================================${NC}"
+    echo -e "${YELLOW}${BOLD}Installation Script for Linux${NC}"
+    echo -e "${YELLOW}${BOLD}BattleTech Extended 3025-3061${NC}"
+    echo -e "${YELLOW}${BOLD}Version 1.9.3.7${NC}"
+    echo -e "${YELLOW}==========================================================================================${NC}"
+    echo
     if [[ "$VERBOSE_MODE" == "true" ]]; then
         echo -e "${YELLOW}Verbose mode enabled - all commands will be displayed${NC}"
     fi
@@ -674,9 +822,42 @@ main() {
     fi
     echo
     
+    # Ask about BiggerDrops mod
+    echo -e "${YELLOW}================================================================================${NC}"
+    echo -e "${YELLOW}${BOLD}📦 OPTIONAL MOD INSTALLATION 📦${NC}"
+    echo -e "${YELLOW}================================================================================${NC}"
+    echo
+    echo -e "${BOLD}Extended BiggerDrops Patch Mod:${NC}"
+    echo -e "- Increases mission drop sizes for more challenging battles"
+    echo -e "- ${BOLD}${RED}REQUIRES A NEW SAVE GAME${NC} - cannot be added to existing saves"
+    echo -e "- Must decide now - cannot be installed later"
+    echo
+    echo -e "${YELLOW}================================================================================${NC}"
+    echo
+    while true; do
+        read -p "Do you want to install the Extended BiggerDrops Patch mod? (y/n): " -r
+        case $REPLY in
+            [Yy]|[Yy][Ee][Ss])
+                INSTALL_BIGGERDROPS=true
+                print_success "Extended BiggerDrops Patch will be installed"
+                break
+                ;;
+            [Nn]|[Nn][Oo])
+                INSTALL_BIGGERDROPS=false
+                print_status "Extended BiggerDrops Patch will be skipped"
+                break
+                ;;
+            *)
+                echo "Please answer yes (y) or no (n)."
+                ;;
+        esac
+    done
+    echo
+    
     # Initialize log file
     echo "BEX:CE Installation Log - $(date)" > "$LOG_FILE"
     log_message "Starting BEX:CE installation"
+    log_message "Install BiggerDrops: $INSTALL_BIGGERDROPS"
     
     # Check for required tools
     print_status "Checking system requirements..."
@@ -714,15 +895,30 @@ main() {
     local temp_dir="$SCRIPT_DIR/temp"
     mkdir -p "$temp_dir"
     
+    # Set up error handling trap
+    trap 'print_error "Installation failed. Check the log file for details: $LOG_FILE"; show_cleanup_commands; exit 1' ERR
+    
     # Backup existing mods
     print_status "Checking for existing mods and creating backup..."
     wait_for_confirmation
     backup_existing_mods "$battletech_path"
     
+    # Calculate total steps
+    TOTAL_STEPS=3  # BEX:CE, CAB, ModTek
+    if [[ "$INSTALL_BIGGERDROPS" == "true" ]]; then
+        TOTAL_STEPS=$((TOTAL_STEPS + 1))  # Add BiggerDrops step
+    fi
+    
     # Install components
-    install_bex_ce "$battletech_path"  # Skipped for debugging
-    install_cab "$battletech_path"     # Skipped for debugging
-    install_modtek "$battletech_path"    # Debugging ModTekInjector execution
+    install_bex_ce "$battletech_path"
+    
+    # Install BiggerDrops if requested
+    if [[ "$INSTALL_BIGGERDROPS" == "true" ]]; then
+        install_biggerdrops "$battletech_path"
+    fi
+    
+    install_cab "$battletech_path"
+    install_modtek "$battletech_path"
     
     # Prepare cleanup information
     print_status "Preparing cleanup information..."
@@ -740,6 +936,9 @@ main() {
             cleanup_paths+=("$proton_mods_dir")
         fi
     fi
+    
+    # Clear error trap since we completed successfully
+    trap - ERR
     
     # Show summary
     show_summary "$battletech_path" "${cleanup_paths[@]}"
