@@ -157,6 +157,8 @@ command_exists() {
 
 # Function to find Steam Proton installation
 find_proton() {
+    local battletech_path="$1"
+    
     # Check for Steam Proton
     local steam_paths=(
         "$HOME/.steam/steam/steamapps/common/Proton*"
@@ -168,13 +170,38 @@ find_proton() {
     for path_pattern in "${steam_paths[@]}"; do
         for proton_path in $path_pattern; do
             if [[ -d "$proton_path" && -f "$proton_path/proton" ]]; then
-                # Return both the proton path and the compat data path
-                local compat_data="$HOME/.steam/steam/steamapps/compatdata"
-                if [[ ! -d "$compat_data" ]]; then
-                    compat_data="$HOME/.local/share/Steam/steamapps/compatdata"
+                # Determine compat data path based on BattleTech installation location
+                local compat_data=""
+                
+                # Extract Steam root from BattleTech path
+                if [[ "$battletech_path" == *"/.steam/steam/steamapps/common/BATTLETECH" ]]; then
+                    compat_data="$(dirname "$(dirname "$(dirname "$battletech_path")")")/compatdata"
+                elif [[ "$battletech_path" == *"/.local/share/Steam/steamapps/common/BATTLETECH" ]]; then
+                    compat_data="$(dirname "$(dirname "$(dirname "$battletech_path")")")/compatdata"
+                elif [[ "$battletech_path" == *"/usr/share/steam/steamapps/common/BATTLETECH" ]]; then
+                    compat_data="$(dirname "$(dirname "$(dirname "$battletech_path")")")/compatdata"
+                elif [[ "$battletech_path" == *"/opt/steam/steamapps/common/BATTLETECH" ]]; then
+                    compat_data="$(dirname "$(dirname "$(dirname "$battletech_path")")")/compatdata"
+                else
+                    # For custom paths (like SD cards), try to find compatdata relative to BattleTech path
+                    local steam_root="$(dirname "$(dirname "$(dirname "$battletech_path")")")"
+                    compat_data="$steam_root/compatdata"
+                    
+                    # If that doesn't exist, try common Steam locations
+                    if [[ ! -d "$compat_data" ]]; then
+                        if [[ -d "$HOME/.steam/steam/steamapps/compatdata" ]]; then
+                            compat_data="$HOME/.steam/steam/steamapps/compatdata"
+                        elif [[ -d "$HOME/.local/share/Steam/steamapps/compatdata" ]]; then
+                            compat_data="$HOME/.local/share/Steam/steamapps/compatdata"
+                        fi
+                    fi
                 fi
-                echo "$proton_path/proton|$compat_data"
-                return 0
+                
+                # Verify compat data directory exists
+                if [[ -d "$compat_data" ]]; then
+                    echo "$proton_path/proton|$compat_data"
+                    return 0
+                fi
             fi
         done
     done
@@ -381,7 +408,7 @@ install_modtek() {
     
     # Find Steam Proton
     local proton_info
-    if proton_info=$(find_proton); then
+    if proton_info=$(find_proton "$battletech_path"); then
         # Parse Proton path and compat data path
         local proton_cmd=$(echo "$proton_info" | cut -d'|' -f1)
         local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
@@ -479,7 +506,7 @@ install_cab() {
     
     # Find Steam Proton
     local proton_info
-    if proton_info=$(find_proton); then
+    if proton_info=$(find_proton "$battletech_path"); then
         # Parse Proton path and compat data path
         local proton_cmd=$(echo "$proton_info" | cut -d'|' -f1)
         local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
@@ -678,7 +705,7 @@ show_cleanup_commands() {
     
     # Check for Proton directory cleanup if CAB was installed
     local proton_info
-    if proton_info=$(find_proton); then
+    if proton_info=$(find_proton "$battletech_path"); then
         # Parse Proton path and compat data path
         local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
         local proton_mods_dir="$compat_data/$BATTLETECH_APP_ID/pfx/drive_c/BATTLETECH/mods"
@@ -884,7 +911,7 @@ main() {
     
     # Check for Proton directory cleanup if CAB was installed
     local proton_info
-    if proton_info=$(find_proton); then
+    if proton_info=$(find_proton "$battletech_path"); then
         # Parse Proton path and compat data path
         local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
         local proton_mods_dir="$compat_data/$BATTLETECH_APP_ID/pfx/drive_c/BATTLETECH/mods"

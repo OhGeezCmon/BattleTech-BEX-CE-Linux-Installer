@@ -44,6 +44,7 @@ The script will check for and guide you to install if missing:
   - `~/.local/share/Steam/steamapps/common/BATTLETECH`
   - `/usr/share/steam/steamapps/common/BATTLETECH`
   - `/opt/steam/steamapps/common/BATTLETECH`
+- **Custom locations supported**: The script can handle BattleTech installed on SD cards or other custom paths (e.g., `/run/SD256/.steam/steam/steamapps/common/BATTLETECH`)
 
 ## Quick Start
 
