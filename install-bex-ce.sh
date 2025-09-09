@@ -199,7 +199,9 @@ find_proton() {
                 
                 # Verify compat data directory exists
                 if [[ -d "$compat_data" ]]; then
-                    echo "$proton_path/proton|$compat_data"
+                    # Extract Steam root path for STEAM_COMPAT_CLIENT_INSTALL_PATH
+                    local steam_root="$(dirname "$(dirname "$(dirname "$battletech_path")")")"
+                    echo "$proton_path/proton|$compat_data|$steam_root"
                     return 0
                 fi
             fi
@@ -409,11 +411,13 @@ install_modtek() {
     # Find Steam Proton
     local proton_info
     if proton_info=$(find_proton "$battletech_path"); then
-        # Parse Proton path and compat data path
+        # Parse Proton path, compat data path, and Steam root
         local proton_cmd=$(echo "$proton_info" | cut -d'|' -f1)
         local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
+        local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
         print_success "Found Steam Proton: $proton_cmd"
         print_status "Using compat data path: $compat_data"
+        print_status "Using Steam root path: $steam_root"
     else
         print_error "Steam Proton not found. Please install Steam and Proton."
         print_error "This script now only supports Steam Proton."
@@ -472,7 +476,7 @@ EOF
         
         # Set up Proton environment variables
         export STEAM_COMPAT_DATA_PATH="$compat_data"
-        export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.steam/steam"
+        export STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam_root"
         export PROTON_USE_WINED3D=1
         
         # Use BattleTech's app ID for compat data
@@ -507,11 +511,13 @@ install_cab() {
     # Find Steam Proton
     local proton_info
     if proton_info=$(find_proton "$battletech_path"); then
-        # Parse Proton path and compat data path
+        # Parse Proton path, compat data path, and Steam root
         local proton_cmd=$(echo "$proton_info" | cut -d'|' -f1)
         local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
+        local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
         print_success "Found Steam Proton: $proton_cmd"
         print_status "Using compat data path: $compat_data"
+        print_status "Using Steam root path: $steam_root"
     else
         print_error "Steam Proton not found. Please install Steam and Proton."
         print_error "This script now only supports Steam Proton."
@@ -706,8 +712,9 @@ show_cleanup_commands() {
     # Check for Proton directory cleanup if CAB was installed
     local proton_info
     if proton_info=$(find_proton "$battletech_path"); then
-        # Parse Proton path and compat data path
+        # Parse Proton path, compat data path, and Steam root
         local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
+        local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
         local proton_mods_dir="$compat_data/$BATTLETECH_APP_ID/pfx/drive_c/BATTLETECH/mods"
         
         if [[ -d "$proton_mods_dir" ]]; then
@@ -912,8 +919,9 @@ main() {
     # Check for Proton directory cleanup if CAB was installed
     local proton_info
     if proton_info=$(find_proton "$battletech_path"); then
-        # Parse Proton path and compat data path
+        # Parse Proton path, compat data path, and Steam root
         local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
+        local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
         local proton_mods_dir="$compat_data/$BATTLETECH_APP_ID/pfx/drive_c/BATTLETECH/mods"
         
         if [[ -d "$proton_mods_dir" ]]; then
