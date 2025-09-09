@@ -172,6 +172,8 @@ find_proton() {
             if [[ -d "$proton_path" && -f "$proton_path/proton" ]]; then
                 # Determine compat data path based on BattleTech installation location
                 local compat_data=""
+                print_status "DEBUG: Found Proton at: $proton_path"
+                print_status "DEBUG: BattleTech path: $battletech_path"
                 
                 # Extract Steam root from BattleTech path
                 if [[ "$battletech_path" == *"/.steam/steam/steamapps/common/BATTLETECH" ]]; then
@@ -185,15 +187,17 @@ find_proton() {
                 else
                     # For custom paths (like SD cards), try to find compatdata relative to BattleTech path
                     local steam_root="$(dirname "$(dirname "$(dirname "$battletech_path")")")"
-                    compat_data="$steam_root/compatdata"
+                    compat_data="$steam_root/steamapps/compatdata"
+                    print_status "DEBUG: Using custom path logic"
+                    print_status "DEBUG: Steam root: $steam_root"
+                    print_status "DEBUG: Compat data: $compat_data"
                     
-                    # If that doesn't exist, try common Steam locations
+                    # For custom installations, create the compatdata directory if it doesn't exist
                     if [[ ! -d "$compat_data" ]]; then
-                        if [[ -d "$HOME/.steam/steam/steamapps/compatdata" ]]; then
-                            compat_data="$HOME/.steam/steam/steamapps/compatdata"
-                        elif [[ -d "$HOME/.local/share/Steam/steamapps/compatdata" ]]; then
-                            compat_data="$HOME/.local/share/Steam/steamapps/compatdata"
-                        fi
+                        print_status "Creating compatdata directory for custom installation: $compat_data"
+                        mkdir -p "$compat_data"
+                    else
+                        print_status "DEBUG: Compat data directory already exists: $compat_data"
                     fi
                 fi
                 
