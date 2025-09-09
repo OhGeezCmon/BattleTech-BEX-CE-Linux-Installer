@@ -534,8 +534,13 @@ install_cab() {
     
     # Set up Proton environment variables
     export STEAM_COMPAT_DATA_PATH="$compat_data"
-    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.steam/steam"
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam_root"
     export PROTON_USE_WINED3D=1
+    
+    # Debug output for environment variables
+    print_status "Environment variables set:"
+    print_status "  STEAM_COMPAT_DATA_PATH=$STEAM_COMPAT_DATA_PATH"
+    print_status "  STEAM_COMPAT_CLIENT_INSTALL_PATH=$STEAM_COMPAT_CLIENT_INSTALL_PATH"
     
     # Use BattleTech's app ID for compat data
     local app_compat_path="$compat_data/$BATTLETECH_APP_ID"
