@@ -8,7 +8,7 @@
 #
 # This script automates the installation of BEX:CE on Linux systems using Steam Proton
 # Also optionally installs the Extended BiggerDrops Patch mod
-# Requires: Steam and Proton (no Wine support)
+# Requires: Steam and Proton (no plain Wine support)
 # Based on: https://discourse.modsinexile.com/t/battletech-extended-3025-3061-1-9-3-7/426
 
 set -e  # Exit on any error
@@ -181,49 +181,6 @@ find_proton() {
     
     return 1
 }
-
-# Function to detect distribution and package manager
-detect_distro() {
-    local distro=""
-    local package_manager=""
-    local is_immutable=false
-    
-    # Check for immutable OS indicators
-    if [[ -f "/etc/os-release" ]]; then
-        local os_id=$(grep "^ID=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
-        local os_name=$(grep "^NAME=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
-        
-        # Check for immutable OSes
-        if [[ "$os_id" == "bazzite" ]] || [[ "$os_name" == *"Silverblue"* ]] || [[ "$os_name" == *"Kinoite"* ]] || [[ "$os_name" == *"CoreOS"* ]]; then
-            is_immutable=true
-        fi
-    fi
-    
-    # Detect package manager and distribution
-    if command_exists apt; then
-        package_manager="apt"
-        distro="debian"
-    elif command_exists dnf; then
-        package_manager="dnf"
-        distro="fedora"
-    elif command_exists pacman; then
-        package_manager="pacman"
-        distro="arch"
-    elif command_exists zypper; then
-        package_manager="zypper"
-        distro="opensuse"
-    elif command_exists flatpak; then
-        package_manager="flatpak"
-        distro="flatpak"
-    else
-        package_manager="unknown"
-        distro="unknown"
-    fi
-    
-    echo "$distro|$package_manager|$is_immutable"
-}
-
-
 
 # Function to check if BattleTech is installed
 find_battletech_install() {
