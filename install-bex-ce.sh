@@ -537,10 +537,35 @@ install_cab() {
     export STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam_root"
     export PROTON_USE_WINED3D=1
     
+    # Additional environment variables that might be needed
+    export STEAM_COMPAT_APP_ID="$BATTLETECH_APP_ID"
+    export PROTON_LOG_DIR="$compat_data/$BATTLETECH_APP_ID"
+    
     # Debug output for environment variables
     print_status "Environment variables set:"
     print_status "  STEAM_COMPAT_DATA_PATH=$STEAM_COMPAT_DATA_PATH"
     print_status "  STEAM_COMPAT_CLIENT_INSTALL_PATH=$STEAM_COMPAT_CLIENT_INSTALL_PATH"
+    
+    # Verify directories exist
+    print_status "Verifying directories exist:"
+    if [[ -d "$compat_data" ]]; then
+        print_status "  ✓ Compat data directory exists: $compat_data"
+    else
+        print_error "  ✗ Compat data directory missing: $compat_data"
+    fi
+    
+    if [[ -d "$steam_root" ]]; then
+        print_status "  ✓ Steam root directory exists: $steam_root"
+    else
+        print_error "  ✗ Steam root directory missing: $steam_root"
+    fi
+    
+    local app_compat_path="$compat_data/$BATTLETECH_APP_ID"
+    if [[ -d "$app_compat_path" ]]; then
+        print_status "  ✓ App compat directory exists: $app_compat_path"
+    else
+        print_warning "  ⚠ App compat directory missing (will be created): $app_compat_path"
+    fi
     
     # Use BattleTech's app ID for compat data
     local app_compat_path="$compat_data/$BATTLETECH_APP_ID"
