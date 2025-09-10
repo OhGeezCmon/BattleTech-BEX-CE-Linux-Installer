@@ -624,10 +624,10 @@ install_cab() {
     local proton_mods_dir="$compat_data/$BATTLETECH_APP_ID/pfx/drive_c/BATTLETECH/mods"
     local battletech_mods_dir="$battletech_path/Mods"
     
-    if [[ -d "$proton_mods_dir" ]]; then
-        print_status "Copying CAB files from Proton directory to BattleTech Mods directory..."
-        local cmd="cp -r \"$proton_mods_dir\"/* \"$battletech_mods_dir/\""
-        execute_command "$cmd" "Copying CAB files from Proton directory to Mods directory"
+    if [[ -d "$proton_mods_dir" ]] && [[ -n "$(ls -A "$proton_mods_dir" 2>/dev/null)" ]]; then
+        print_status "Moving CAB files from Proton directory to BattleTech Mods directory..."
+        local cmd="mv \"$proton_mods_dir\"/* \"$battletech_mods_dir/\""
+        execute_command "$cmd" "Moving CAB files from Proton directory to Mods directory"
         
         # Set proper ownership and permissions
         cmd="chown -R $(id -u):$(id -g) \"$battletech_mods_dir\""
@@ -904,6 +904,7 @@ main() {
         print_error "unzip is required but not installed. Please install it first."
         echo "On Ubuntu/Debian: sudo apt install unzip"
         echo "On Fedora/RHEL: sudo dnf install unzip"
+        echo "On Arch Linux: sudo pacman -S unzip"
         exit 1
     fi
     
@@ -911,6 +912,7 @@ main() {
         print_error "Either wget or curl is required but neither is installed."
         echo "On Ubuntu/Debian: sudo apt install wget"
         echo "On Fedora/RHEL: sudo dnf install wget"
+        echo "On Arch Linux: sudo pacman -S wget"
         exit 1
     fi
     
