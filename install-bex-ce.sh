@@ -173,8 +173,10 @@ find_proton() {
                 # Determine compat data path based on BattleTech installation location
                 local compat_data=""
                 # Debug output to stderr (won't be captured by command substitution)
-                echo "DEBUG: Found Proton at: $proton_path" >&2
-                echo "DEBUG: BattleTech path: $battletech_path" >&2
+                if [[ "$DEBUG_MODE" == "true" ]]; then
+                    echo "DEBUG: Found Proton at: $proton_path" >&2
+                    echo "DEBUG: BattleTech path: $battletech_path" >&2
+                fi
                 
                 # Extract Steam root from BattleTech path
                 if [[ "$battletech_path" == *"/.steam/steam/steamapps/common/BATTLETECH" ]]; then
@@ -189,15 +191,16 @@ find_proton() {
                     # For custom paths (like SD cards), try to find compatdata relative to BattleTech path
                     local steam_root="$(dirname "$(dirname "$(dirname "$battletech_path")")")"
                     compat_data="$steam_root/steamapps/compatdata"
-                    echo "DEBUG: Using custom path logic" >&2
-                    echo "DEBUG: Steam root: $steam_root" >&2
-                    echo "DEBUG: Compat data: $compat_data" >&2
-                    
-                    # Verify compatdata directory exists (should always exist for Steam installations)
-                    if [[ -d "$compat_data" ]]; then
-                        echo "DEBUG: Compat data directory exists: $compat_data" >&2
-                    else
-                        echo "DEBUG: WARNING - Compat data directory missing: $compat_data" >&2
+                    if [[ "$DEBUG_MODE" == "true" ]]; then
+                        echo "DEBUG: Using custom path logic" >&2
+                        echo "DEBUG: Steam root: $steam_root" >&2
+                        echo "DEBUG: Compat data: $compat_data" >&2
+                        # Verify compatdata directory exists (should always exist for Steam installations)
+                        if [[ -d "$compat_data" ]]; then
+                            echo "DEBUG: Compat data directory exists: $compat_data" >&2
+                        else
+                            echo "DEBUG: WARNING - Compat data directory missing: $compat_data" >&2
+                        fi
                     fi
                 fi
                 
@@ -422,8 +425,10 @@ install_modtek() {
         print_success "Found Steam Proton: $proton_cmd"
         print_status "Using compat data path: $compat_data"
         print_status "Using Steam root path: $steam_root"
-        print_status "DEBUG: BattleTech path: $battletech_path"
-        print_status "DEBUG: Using custom path logic for SD card installation"
+        if [[ "$DEBUG_MODE" == "true" ]]; then
+            print_status "DEBUG: BattleTech path: $battletech_path"
+            print_status "DEBUG: Using custom path logic for SD card installation"
+        fi
     else
         print_error "Steam Proton not found. Please install Steam and Proton."
         print_error "This script now only supports Steam Proton."
@@ -524,8 +529,10 @@ install_cab() {
         print_success "Found Steam Proton: $proton_cmd"
         print_status "Using compat data path: $compat_data"
         print_status "Using Steam root path: $steam_root"
-        print_status "DEBUG: BattleTech path: $battletech_path"
-        print_status "DEBUG: Using custom path logic for SD card installation"
+        if [[ "$DEBUG_MODE" == "true" ]]; then
+            print_status "DEBUG: BattleTech path: $battletech_path"
+            print_status "DEBUG: Using custom path logic for SD card installation"
+        fi
     else
         print_error "Steam Proton not found. Please install Steam and Proton."
         print_error "This script now only supports Steam Proton."
