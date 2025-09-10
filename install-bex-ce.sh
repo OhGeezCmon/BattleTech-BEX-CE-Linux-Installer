@@ -36,7 +36,6 @@ BEX_CE_URL="https://discourse.modsinexile.com/uploads/short-url/iPwkIrehw4cIX24D
 MODTEK_URL="https://github.com/BattletechModders/ModTek/releases/download/v0.8.0.0/ModTek_v0.8.0.zip"
 CAB_URL="https://discourse.modsinexile.com/uploads/short-url/8X3zwatCvUjgEx3DR6y4yqlUb3i.exe"
 BIGGERDROPS_URL="https://discourse.modsinexile.com/uploads/short-url/A3IKwCNwRIuv26jMXmQRxDLIVrs.zip"
-INSTALL_BIGGERDROPS=false
 
 # Step tracking
 CURRENT_STEP=0
@@ -153,6 +152,47 @@ verify_file_operation() {
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
+}
+
+# Function to set up Proton environment variables
+setup_proton_environment() {
+    local compat_data="$1"
+    local steam_root="$2"
+    
+    export STEAM_COMPAT_DATA_PATH="$compat_data/$BATTLETECH_APP_ID"
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam_root"
+    export PROTON_USE_WINED3D=1
+    export STEAM_COMPAT_APP_ID="$BATTLETECH_APP_ID"
+    export PROTON_LOG_DIR="$compat_data/$BATTLETECH_APP_ID"
+}
+
+# Function to find and parse Proton information
+find_and_parse_proton() {
+    local battletech_path="$1"
+    local proton_info
+    
+    if proton_info=$(find_proton "$battletech_path"); then
+        # Parse Proton path, compat data path, and Steam root
+        local proton_cmd=$(echo "$proton_info" | cut -d'|' -f1)
+        local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
+        local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
+        
+        print_success "Found Steam Proton: $proton_cmd"
+        print_status "Using compat data path: $compat_data"
+        print_status "Using Steam root path: $steam_root"
+        
+        if [[ "$DEBUG_MODE" == "true" ]]; then
+            print_status "DEBUG: BattleTech path: $battletech_path"
+            print_status "DEBUG: Using custom path logic for SD card installation"
+        fi
+        
+        echo "$proton_cmd|$compat_data|$steam_root"
+        return 0
+    else
+        print_error "Steam Proton not found. Please install Steam and Proton."
+        print_error "This script only supports Steam Proton."
+        exit 1
+    fi
 }
 
 # Function to find Steam Proton installation
@@ -327,26 +367,16 @@ extract_zip() {
     fi
     
     # Create extraction directory
-    local cmd="mkdir -p \"$extract_dir\""
-    execute_command "$cmd" "Creating extraction directory"
+    execute_command "mkdir -p \"$extract_dir\"" "Creating extraction directory"
     
     # Set proper permissions on extraction directory to avoid permission issues
-    local cmd="chmod -R 755 \"$extract_dir\""
-    execute_command "$cmd" "Setting permissions on extraction directory"
+    execute_command "chmod -R 755 \"$extract_dir\"" "Setting permissions on extraction directory"
     
     # Extract the zip file
-    local cmd="unzip -o -q \"$zip_file\" -d \"$extract_dir\""
-    execute_command "$cmd" "Extracting $filename to $extract_dir"
+    execute_command "unzip -o -q \"$zip_file\" -d \"$extract_dir\"" "Extracting $filename to $extract_dir"
     
     # Set proper ownership and permissions on extracted files
-    local cmd="chown -R $(id -u):$(id -g) \"$extract_dir\""
-    execute_command "$cmd" "Setting ownership on extracted files"
-    
-    local cmd="chmod -R 644 \"$extract_dir\""
-    execute_command "$cmd" "Setting file permissions on extracted files"
-    
-    local cmd="find \"$extract_dir\" -type d -exec chmod 755 {} +"
-    execute_command "$cmd" "Setting directory permissions on extracted files"
+    execute_command "chown -R $(id -u):$(id -g) \"$extract_dir\" && find \"$extract_dir\" -type f -exec chmod 644 {} + && find \"$extract_dir\" -type d -exec chmod 755 {} +" "Setting ownership and permissions on extracted files"
     
     # Verify extraction succeeded by checking if directory has content
     if [[ -d "$extract_dir" ]] && [[ -n "$(ls -A "$extract_dir" 2>/dev/null)" ]]; then
@@ -432,24 +462,10 @@ install_modtek() {
     wait_for_confirmation
     
     # Find Steam Proton
-    local proton_info
-    if proton_info=$(find_proton "$battletech_path"); then
-        # Parse Proton path, compat data path, and Steam root
-        local proton_cmd=$(echo "$proton_info" | cut -d'|' -f1)
-        local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
-        local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
-        print_success "Found Steam Proton: $proton_cmd"
-        print_status "Using compat data path: $compat_data"
-        print_status "Using Steam root path: $steam_root"
-        if [[ "$DEBUG_MODE" == "true" ]]; then
-            print_status "DEBUG: BattleTech path: $battletech_path"
-            print_status "DEBUG: Using custom path logic for SD card installation"
-        fi
-    else
-        print_error "Steam Proton not found. Please install Steam and Proton."
-        print_error "This script now only supports Steam Proton."
-        exit 1
-    fi
+    local proton_info=$(find_and_parse_proton "$battletech_path")
+    local proton_cmd=$(echo "$proton_info" | cut -d'|' -f1)
+    local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
+    local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
     
     # Download ModTek ZIP file
     local modtek_zip="$temp_dir/ModTek.zip"
@@ -457,8 +473,7 @@ install_modtek() {
     
     # Extract ModTek to Mods directory
     local mods_dir="$battletech_path/Mods"
-    local cmd="mkdir -p \"$mods_dir\""
-    execute_command "$cmd" "Creating Mods directory"
+    execute_command "mkdir -p \"$mods_dir\"" "Creating Mods directory"
     
     extract_zip "$modtek_zip" "$mods_dir"
     
@@ -490,8 +505,7 @@ echo Batch file completed.
 EOF
         
         # Set proper permissions for the batch file
-        local cmd="chmod +x \"$batch_file\""
-        execute_command "$cmd" "Setting permissions for batch file"
+        execute_command "chmod +x \"$batch_file\"" "Setting permissions for batch file"
         
         print_status "Running ModTekInjector.exe via batch file with Proton..."
         print_warning "The injector may open a GUI window. Please follow the installation prompts."
@@ -502,15 +516,29 @@ EOF
         print_status "Windows path for batch file: $proton_batch_path"
         
         # Set up Proton environment variables
-        export STEAM_COMPAT_DATA_PATH="$compat_data"
-        export STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam_root"
-        export PROTON_USE_WINED3D=1
+        setup_proton_environment "$compat_data" "$steam_root"
         
-        # Use BattleTech's app ID for compat data
-        local app_compat_path="$compat_data/$BATTLETECH_APP_ID"
+        # Debug output for environment variables
+        if [[ "$DEBUG_MODE" == "true" ]]; then
+            echo "DEBUG: ModTek Proton environment variables:" >&2
+            echo "DEBUG:   STEAM_COMPAT_DATA_PATH=$STEAM_COMPAT_DATA_PATH" >&2
+            echo "DEBUG:   STEAM_COMPAT_CLIENT_INSTALL_PATH=$STEAM_COMPAT_CLIENT_INSTALL_PATH" >&2
+            echo "DEBUG:   STEAM_COMPAT_APP_ID=$STEAM_COMPAT_APP_ID" >&2
+            echo "DEBUG:   PROTON_LOG_DIR=$PROTON_LOG_DIR" >&2
+            echo "DEBUG:   ModTek directory: $modtek_dir" >&2
+            echo "DEBUG:   Batch file: $batch_file" >&2
+        fi
         
-        # Set the specific compat data path for this app
-        export STEAM_COMPAT_DATA_PATH="$app_compat_path"
+        # Verify ModTek directory and batch file exist
+        if [[ ! -d "$modtek_dir" ]]; then
+            print_error "ModTek directory not found: $modtek_dir"
+            exit 1
+        fi
+        
+        if [[ ! -f "$batch_file" ]]; then
+            print_error "ModTek batch file not found: $batch_file"
+            exit 1
+        fi
         
         # Run the batch file with Proton by changing to the ModTek directory first
         print_status "Running batch file with Proton from ModTek directory..."
@@ -536,24 +564,10 @@ install_cab() {
     wait_for_confirmation
     
     # Find Steam Proton
-    local proton_info
-    if proton_info=$(find_proton "$battletech_path"); then
-        # Parse Proton path, compat data path, and Steam root
-        local proton_cmd=$(echo "$proton_info" | cut -d'|' -f1)
-        local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
-        local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
-        print_success "Found Steam Proton: $proton_cmd"
-        print_status "Using compat data path: $compat_data"
-        print_status "Using Steam root path: $steam_root"
-        if [[ "$DEBUG_MODE" == "true" ]]; then
-            print_status "DEBUG: BattleTech path: $battletech_path"
-            print_status "DEBUG: Using custom path logic for SD card installation"
-        fi
-    else
-        print_error "Steam Proton not found. Please install Steam and Proton."
-        print_error "This script now only supports Steam Proton."
-        exit 1
-    fi
+    local proton_info=$(find_and_parse_proton "$battletech_path")
+    local proton_cmd=$(echo "$proton_info" | cut -d'|' -f1)
+    local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
+    local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
     
     # Download CAB installer
     local cab_exe="$temp_dir/CAB_Installer.exe"
@@ -564,13 +578,7 @@ install_cab() {
     print_warning "The installer may open a GUI window. Please follow the installation prompts."
     
     # Set up Proton environment variables
-    export STEAM_COMPAT_DATA_PATH="$compat_data"
-    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam_root"
-    export PROTON_USE_WINED3D=1
-    
-    # Additional environment variables that might be needed
-    export STEAM_COMPAT_APP_ID="$BATTLETECH_APP_ID"
-    export PROTON_LOG_DIR="$compat_data/$BATTLETECH_APP_ID"
+    setup_proton_environment "$compat_data" "$steam_root"
     
     # Debug output for environment variables
     print_status "Environment variables set:"
@@ -591,18 +599,12 @@ install_cab() {
         print_error "  ✗ Steam root directory missing: $steam_root"
     fi
     
-    local app_compat_path="$compat_data/$BATTLETECH_APP_ID"
-    if [[ -d "$app_compat_path" ]]; then
-        print_status "  ✓ App compat directory exists: $app_compat_path"
+    if [[ -d "$compat_data/$BATTLETECH_APP_ID" ]]; then
+        print_status "  ✓ App compat directory exists: $compat_data/$BATTLETECH_APP_ID"
     else
-        print_warning "  ⚠ App compat directory missing (will be created): $app_compat_path"
+        print_warning "  ⚠ App compat directory missing: $compat_data/$BATTLETECH_APP_ID"
     fi
     
-    # Use BattleTech's app ID for compat data
-    local app_compat_path="$compat_data/$BATTLETECH_APP_ID"
-    
-    # Set the specific compat data path for this app
-    export STEAM_COMPAT_DATA_PATH="$app_compat_path"
     
     # Inform user before starting installation
     print_status "Starting CAB installer with Proton..."
@@ -624,8 +626,7 @@ install_cab() {
     print_status "Press Enter when you're ready to start the CAB installation..."
     read -r
     
-    local cmd="\"$proton_cmd\" run \"$cab_exe\""
-    execute_command "$cmd" "Running CAB installer with Proton"
+    execute_command "\"$proton_cmd\" run \"$cab_exe\"" "Running CAB installer with Proton"
     
     # Wait for user to complete installation
     echo
@@ -640,12 +641,10 @@ install_cab() {
     
     if [[ -d "$proton_mods_dir" ]] && [[ -n "$(ls -A "$proton_mods_dir" 2>/dev/null)" ]]; then
         print_status "Moving CAB files from Proton directory to BattleTech Mods directory..."
-        local cmd="mv \"$proton_mods_dir\"/* \"$battletech_mods_dir/\""
-        execute_command "$cmd" "Moving CAB files from Proton directory to Mods directory"
+        execute_command "mv \"$proton_mods_dir\"/* \"$battletech_mods_dir/\"" "Moving CAB files from Proton directory to Mods directory"
         
         # Set proper ownership and permissions
-        cmd="chown -R $(id -u):$(id -g) \"$battletech_mods_dir\""
-        execute_command "$cmd" "Setting ownership for CAB files"
+        execute_command "chown -R $(id -u):$(id -g) \"$battletech_mods_dir\"" "Setting ownership for CAB files"
         
         print_success "CAB files copied to BattleTech Mods directory"
         log_message "CAB files copied from $proton_mods_dir to $battletech_mods_dir"
@@ -694,8 +693,7 @@ install_bex_ce() {
     
     # Create Mods directory if it doesn't exist
     local mods_dir="$battletech_path/Mods"
-    local cmd="mkdir -p \"$mods_dir\""
-    execute_command "$cmd" "Creating Mods directory"
+    execute_command "mkdir -p \"$mods_dir\"" "Creating Mods directory"
     
     # Extract BEX:CE directly into Mods directory
     extract_zip "$bex_zip" "$mods_dir"
@@ -759,7 +757,7 @@ show_summary() {
     if [[ "$INSTALL_BIGGERDROPS" == "true" ]]; then
         echo "- Extended BiggerDrops Patch increases mission drop sizes for more challenging battles"
     fi
-    show_cleanup_commands
+    show_cleanup_commands "${cleanup_paths[@]}"
     echo "For support, visit: https://github.com/OhGeezCmon/BattleTech-BEX-CE-Linux-Installer"
     echo "Or contact ohgeezcmon on Discord"
     echo
@@ -767,21 +765,7 @@ show_summary() {
 
 # Function to show cleanup commands
 show_cleanup_commands() {
-    local temp_dir="$SCRIPT_DIR/temp"
-    local cleanup_paths=("$temp_dir")
-    
-    # Check for Proton directory cleanup if CAB was installed
-    local proton_info
-    if proton_info=$(find_proton "$battletech_path"); then
-        # Parse Proton path, compat data path, and Steam root
-        local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
-        local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
-        local proton_mods_dir="$compat_data/$BATTLETECH_APP_ID/pfx/drive_c/BATTLETECH/mods"
-        
-        if [[ -d "$proton_mods_dir" ]]; then
-            cleanup_paths+=("$proton_mods_dir")
-        fi
-    fi
+    local cleanup_paths=("$@")
     
     echo
     echo -e "${YELLOW}================================================================================${NC}"
