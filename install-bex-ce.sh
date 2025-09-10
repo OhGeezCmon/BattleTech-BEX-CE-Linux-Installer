@@ -177,13 +177,13 @@ find_and_parse_proton() {
         local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
         local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
         
-        print_success "Found Steam Proton: $proton_cmd"
-        print_status "Using compat data path: $compat_data"
-        print_status "Using Steam root path: $steam_root"
+        print_success "Found Steam Proton: $proton_cmd" >&2
+        print_status "Using compat data path: $compat_data" >&2
+        print_status "Using Steam root path: $steam_root" >&2
         
         if [[ "$DEBUG_MODE" == "true" ]]; then
-            print_status "DEBUG: BattleTech path: $battletech_path"
-            print_status "DEBUG: Using custom path logic for SD card installation"
+            print_status "DEBUG: BattleTech path: $battletech_path" >&2
+            print_status "DEBUG: Using custom path logic for SD card installation" >&2
         fi
         
         echo "$proton_cmd|$compat_data|$steam_root"
