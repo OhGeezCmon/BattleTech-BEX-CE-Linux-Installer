@@ -247,8 +247,8 @@ find_battletech_install() {
 # Function to prompt for BattleTech installation path
 prompt_battletech_path() {
     local path
-    echo "Steam Deck SD Card Example: /run/media/deck/<SD CARD NAME>/steamapps/common/BATTLETECH"
-    echo
+    echo "Steam Deck SD Card Example: /run/media/deck/<SD CARD NAME>/steamapps/common/BATTLETECH" >&2
+    echo >&2
     while true; do
         read -p "Please enter the full path to your BattleTech installation directory: " path
         if [[ -d "$path" ]]; then
