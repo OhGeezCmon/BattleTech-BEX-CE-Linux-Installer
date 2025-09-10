@@ -330,9 +330,23 @@ extract_zip() {
     local cmd="mkdir -p \"$extract_dir\""
     execute_command "$cmd" "Creating extraction directory"
     
+    # Set proper permissions on extraction directory to avoid permission issues
+    local cmd="chmod -R 755 \"$extract_dir\""
+    execute_command "$cmd" "Setting permissions on extraction directory"
+    
     # Extract the zip file
     local cmd="unzip -o -q \"$zip_file\" -d \"$extract_dir\""
     execute_command "$cmd" "Extracting $filename to $extract_dir"
+    
+    # Set proper ownership and permissions on extracted files
+    local cmd="chown -R $(id -u):$(id -g) \"$extract_dir\""
+    execute_command "$cmd" "Setting ownership on extracted files"
+    
+    local cmd="chmod -R 644 \"$extract_dir\""
+    execute_command "$cmd" "Setting file permissions on extracted files"
+    
+    local cmd="find \"$extract_dir\" -type d -exec chmod 755 {} +"
+    execute_command "$cmd" "Setting directory permissions on extracted files"
     
     # Verify extraction succeeded by checking if directory has content
     if [[ -d "$extract_dir" ]] && [[ -n "$(ls -A "$extract_dir" 2>/dev/null)" ]]; then
