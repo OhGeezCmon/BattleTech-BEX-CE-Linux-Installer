@@ -963,19 +963,6 @@ main() {
     local cleanup_paths=()
     cleanup_paths+=("$temp_dir")
     
-    # Check for Proton directory cleanup if CAB was installed
-    local proton_info
-    if proton_info=$(find_proton "$battletech_path"); then
-        # Parse Proton path, compat data path, and Steam root
-        local compat_data=$(echo "$proton_info" | cut -d'|' -f2)
-        local steam_root=$(echo "$proton_info" | cut -d'|' -f3)
-        local proton_mods_dir="$compat_data/$BATTLETECH_APP_ID/pfx/drive_c/BATTLETECH/mods"
-        
-        if [[ -d "$proton_mods_dir" ]]; then
-            cleanup_paths+=("$proton_mods_dir")
-        fi
-    fi
-    
     # Clear error trap since we completed successfully
     trap - ERR
     
