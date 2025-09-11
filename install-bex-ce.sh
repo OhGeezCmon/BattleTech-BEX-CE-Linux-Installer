@@ -220,13 +220,13 @@ find_proton() {
                 
                 # Extract Steam root from BattleTech path
                 if [[ "$battletech_path" == *"/.steam/steam/steamapps/common/BATTLETECH" ]]; then
-                    compat_data="$(dirname "$(dirname "$(dirname "$battletech_path")")")/compatdata"
+                    compat_data="$(dirname "$(dirname "$battletech_path")")/compatdata"
                 elif [[ "$battletech_path" == *"/.local/share/Steam/steamapps/common/BATTLETECH" ]]; then
-                    compat_data="$(dirname "$(dirname "$(dirname "$battletech_path")")")/compatdata"
+                    compat_data="$(dirname "$(dirname "$battletech_path")")/compatdata"
                 elif [[ "$battletech_path" == *"/usr/share/steam/steamapps/common/BATTLETECH" ]]; then
-                    compat_data="$(dirname "$(dirname "$(dirname "$battletech_path")")")/compatdata"
+                    compat_data="$(dirname "$(dirname "$battletech_path")")/compatdata"
                 elif [[ "$battletech_path" == *"/opt/steam/steamapps/common/BATTLETECH" ]]; then
-                    compat_data="$(dirname "$(dirname "$(dirname "$battletech_path")")")/compatdata"
+                    compat_data="$(dirname "$(dirname "$battletech_path")")/compatdata"
                 else
                     # For custom paths (like SD cards), try to find compatdata relative to BattleTech path
                     local steam_root="$(dirname "$(dirname "$(dirname "$battletech_path")")")"
