@@ -510,11 +510,6 @@ EOF
         print_status "Running ModTekInjector.exe via batch file with Proton..."
         print_warning "The injector may open a GUI window. Please follow the installation prompts."
         
-        # Convert batch file path to Windows format for Proton
-        print_status "Original batch file path: $batch_file"
-        local proton_batch_path=$(echo "$batch_file" | sed "s|^$HOME|Z:|" | sed 's|/|\\|g')
-        print_status "Windows path for batch file: $proton_batch_path"
-        
         # Set up Proton environment variables
         setup_proton_environment "$compat_data" "$steam_root"
         
@@ -540,14 +535,20 @@ EOF
             exit 1
         fi
         
-        # Run the batch file with Proton by changing to the ModTek directory first
-        print_status "Running batch file with Proton from ModTek directory..."
+        # Run the batch file with Proton using the correct Wine prefix
+        print_status "Running batch file with Proton using BattleTech's wine prefix..."
+        local wine_prefix="$compat_data/$BATTLETECH_APP_ID/pfx"
+        
+        # Set the Wine prefix environment variable for Proton
+        export WINEPREFIX="$wine_prefix"
+        
         local cmd="cd \"$modtek_dir\" && \"$proton_cmd\" run start modtek_injector.bat 2>&1 | tee -a \"$LOG_FILE\""
+        print_status "Using wine prefix: $wine_prefix"
         print_status "Full command: $cmd"
-        execute_command "$cmd" "Running ModTekInjector.exe batch file with Proton start"
+        execute_command "$cmd" "Running ModTekInjector.exe batch file with Proton using correct Wine prefix"
         
         show_step_progress "ModTek Injection"
-        log_message "ModTekInjector.exe executed via batch file with $proton_cmd"
+        log_message "ModTekInjector.exe executed via batch file with $proton_cmd using Wine prefix $wine_prefix"
     else
         print_error "Could not find ModTekInjector.exe in extracted files"
         exit 1
